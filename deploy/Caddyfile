@@ -1,0 +1,48 @@
+# HTTPS, and the split between what the world may reach and what it may not.
+#
+# Caddy obtains and renews the certificate itself from this hostname. The only
+# manual step is pointing an A record at the server.
+
+{$EXCEEDBOX_DOMAIN} {
+	encode zstd gzip
+
+	# Security headers. The booking page is the one thing strangers load, and
+	# it carries no third-party script by design, so the CSP can be strict.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "no-referrer"
+		Content-Security-Policy   "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		-Server
+	}
+
+	# The developer token minter must never be reachable from the internet,
+	# whatever the application thinks. app/auth.py already refuses to enable dev
+	# auth when a real Supabase project is configured; this is the second lock,
+	# at a different layer, so a single mistake cannot open it.
+	@devtoken path /api/devtoken*
+	respond @devtoken 404
+
+	# A stranger's request rate. Generous for a human filling in a form,
+	# nowhere near enough to enumerate booking references.
+	rate_limit {
+		zone public {
+			match {
+				path /api/public/* /book /u/*
+			}
+			key    {remote_host}
+			events 60
+			window 1m
+		}
+	}
+
+	reverse_proxy api:8912 {
+		health_uri /api/health
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

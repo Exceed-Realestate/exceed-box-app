@@ -181,7 +181,7 @@ def test_d4_manual_thirty_pointer_records_who_set_it():
     scoring.record(con, lid, "wants_meeting", detail="said so on WhatsApp",
                    source="human", set_by=1)
     ex = scoring.explain(con, lid)
-    c = [c for c in ex["components"] if c["kind"] == "wants_meeting"][0]
+    c = [c for c in ex["breakdown"] if c["kind"] == "wants_meeting"][0]
     assert c["source"] == "human" and c["set_by"] == 1, \
         "not blocked — made visible, so the lever is attributable"
 
@@ -283,9 +283,11 @@ def test_unsubscribe_is_a_hard_stop():
                 (lid,))
     con.commit()
     tracking.sendgrid_webhook(con, [{"event": "unsubscribe", "send_id": "s1"}])
-    row = con.execute("""SELECT l.stage, c.basis FROM leads l
+    row = con.execute("""SELECT l.stage, l.exit_state, c.basis FROM leads l
                          JOIN lead_consent c ON c.lead_id=l.id WHERE l.id=?""", (lid,)).fetchone()
-    assert row["stage"] == "unsubscribed" and row["basis"] == "withdrawn", \
+    # SPEC.md D10 migration: exit states live in their own column, separate
+    # from the six forward stages — `stage` itself does not move.
+    assert row["exit_state"] == "unsubscribed" and row["basis"] == "withdrawn", \
         "特定電子メール法 — enforced by the system, not by a note someone writes"
 
 
@@ -296,8 +298,8 @@ def test_bounce_marks_unreachable():
                 (lid,))
     con.commit()
     tracking.sendgrid_webhook(con, [{"event": "bounce", "send_id": "s2", "reason": "550"}])
-    st = con.execute("SELECT stage FROM leads WHERE id=?", (lid,)).fetchone()[0]
-    assert st == "unreachable", "D10: a dead address is an end state, not limbo"
+    ex = con.execute("SELECT exit_state FROM leads WHERE id=?", (lid,)).fetchone()[0]
+    assert ex == "unreachable", "D10: a dead address is an end state, not limbo"
 
 
 # ── D1 · the four passive signals ────────────────────────────────────────────
@@ -332,13 +334,13 @@ def test_d16_source_attribution_counts_people_not_channels():
     r = ingest.upsert_lead(con, name="森田", channel="business_card", email="s@x.example")
     ingest.upsert_lead(con, name="森田", channel="csv", email="s@x.example")
     ingest.upsert_lead(con, name="森田", channel="gohighlevel", email="s@x.example")
-    con.execute("UPDATE leads SET stage='booked' WHERE id=?", (r["lead_id"],))
+    con.execute("UPDATE leads SET stage='meeting_booked' WHERE id=?", (r["lead_id"],))
     con.commit()
     by_source = con.execute(
         """SELECT first_touch, count(*) n FROM leads
-            WHERE merged_into IS NULL AND stage IN ('booked','negotiating','won')
+            WHERE merged_into IS NULL AND stage IN ('meeting_booked','in_negotiation','won')
             GROUP BY first_touch""").fetchall()
-    booked = db.scalar(con, "SELECT count(*) FROM leads WHERE stage='booked'")
+    booked = db.scalar(con, "SELECT count(*) FROM leads WHERE stage='meeting_booked'")
     assert sum(r["n"] for r in by_source) == booked == 1, \
         "one booking, one source — the demo's chart summed 55 against a tile of 30"
 

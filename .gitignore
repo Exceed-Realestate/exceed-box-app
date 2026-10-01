@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .DS_Store
 .env
+.venv/
+logs/
+qa-shots/
+.pytest_cache/
+logs-live-walk.txt
+web-walk.txt
+deploy/*/

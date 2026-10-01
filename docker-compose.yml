@@ -1,0 +1,68 @@
+# Exceed Box — the whole deployment.
+#
+#   docker compose up -d
+#
+# Three containers: the API, the background worker, and Caddy in front for
+# HTTPS. Caddy is here rather than nginx because it obtains and renews the
+# certificate by itself from the hostname in EXCEEDBOX_DOMAIN — one less thing
+# to remember in ninety days, and certificate expiry is the classic way an
+# internal tool dies quietly on a weekend.
+#
+# What is NOT here, deliberately: no Postgres container. The database is
+# Supabase, which is backed up, patched and monitored by somebody else. Running
+# our own would mean owning backups and upgrades for a 10-15 person tool.
+
+services:
+  api:
+    build: .
+    image: exceed-box:latest
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      # Belt and braces: even if .env were wrong, the developer token minter
+      # must never come up in a deployment.
+      EXCEEDBOX_DEV_AUTH: "0"
+    expose: ["8912"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8912/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: &logging
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+  worker:
+    build: .
+    image: exceed-box:latest
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      EXCEEDBOX_DEV_AUTH: "0"
+    # --loop rather than a cron entry: the process handles SIGTERM by finishing
+    # the pass it is in, so a deploy never interrupts a half-written send. A
+    # cron job killed mid-run leaves a claimed job that only the reclaim sweep
+    # recovers, fifteen minutes later.
+    command: ["python", "scripts/worker.py", "--loop", "--interval", "300"]
+    depends_on:
+      api: {condition: service_healthy}
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      EXCEEDBOX_DOMAIN: ${EXCEEDBOX_DOMAIN:?set EXCEEDBOX_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # certificates — losing this means re-issuing
+      - caddy_config:/config
+    depends_on:
+      api: {condition: service_healthy}
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

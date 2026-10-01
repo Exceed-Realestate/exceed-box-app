@@ -1,2 +1,20 @@
 fastapi>=0.100
 uvicorn>=0.23
+pyjwt>=2.8
+# multipart form/file parsing — SPEC-V2 card scan, voice notes, CSV upload
+python-multipart>=0.0.9
+# .xlsx parsing — SPEC-V2 §7 CSV/Excel import
+openpyxl>=3.1
+
+# Only needed when DATABASE_URL is set (real Postgres/Supabase). The SQLite
+# test suite never imports it, and app/db.py only imports it on that branch —
+# but it IS required for any real deployment, so it is no longer commented out.
+# psycopg 3, not psycopg2: v3 is what app/db.py's adapter is written against.
+psycopg[binary]>=3.1
+# reuse DB connections: a fresh TLS connect per request cost 2–3 s on the production host
+psycopg-pool>=3.2
+
+# ES256 token verification. Supabase signs this project's JWTs with an
+# asymmetric key served from JWKS; PyJWT cannot verify ES256 without it, so a
+# deploy that skips this rejects every real login.
+cryptography>=42

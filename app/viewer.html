@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exceed Box — live backend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#FFD84D; --teal-dark:#8A6A00; --teal-soft:#FFF4CC;
+    --ink:#15171C; --bg:#F4F5F7; --card:#FFFFFF; --line:#E6E8EC; --muted:#6E7480;
+    --orange:#F07B3F; --orange-soft:#FDEEE5; --amber:#E8A23D; --amber-soft:#FBF1DF;
+    --green:#1FA36B; --green-soft:#E4F4EC; --blue:#3E7CB1; --blue-soft:#E8F0F7;
+    --violet:#7A5FB8; --violet-soft:#EFEAF9; --red:#DD5B5B; --red-soft:#FBEAEA;
+    --shadow:0 1px 2px rgba(19,23,28,.05), 0 4px 14px rgba(19,23,28,.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Noto Sans JP',system-ui,sans-serif; background:var(--bg); color:var(--ink);
+       font-size:14px; line-height:1.55; padding:22px 22px 70px;}
+  h1,h2,h3,h4{font-weight:900; letter-spacing:-.01em;}
+  .num{font-family:'Manrope','Noto Sans JP',sans-serif;}
+  code{font-family:'Manrope',ui-monospace,Menlo,monospace; font-size:11px; background:#F1F2F5;
+       padding:1px 6px; border-radius:5px;}
+
+  .top{display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;}
+  .top h1{font-size:20px;}
+  .live{display:inline-flex; align-items:center; gap:7px; background:var(--ink); color:#fff;
+        border-radius:99px; padding:5px 13px; font-size:11.5px; font-weight:800;}
+  .live i{width:8px; height:8px; border-radius:50%; background:#3CE08A;
+          animation:p 1.6s ease-in-out infinite;}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
+  .sub{font-size:12px; color:var(--muted);}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);}
+  .card-head{display:flex; align-items:center; justify-content:space-between; gap:10px;
+             padding:12px 16px; border-bottom:1px solid var(--line);}
+  .card-head h3{font-size:13px;}
+  .hint{font-size:11px; color:var(--muted); font-weight:400;}
+  .card-body{padding:14px 16px;}
+
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:14px;}
+  @media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr);}}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:12px;
+       box-shadow:var(--shadow); padding:12px 14px;}
+  .kpi .l{font-size:10.5px; color:var(--muted); font-weight:700;}
+  .kpi .v{font-family:'Manrope'; font-weight:800; font-size:24px; line-height:1.3;}
+  .kpi .s{font-size:10.5px; color:var(--muted);}
+  .kpi.null{background:#FDF6F6; border-color:#F0D2D2;}
+  .kpi.null .v{color:#A03636; font-size:17px;}
+
+  .flag{border-left:3px solid var(--amber); background:#FFFBF2; border-radius:0 10px 10px 0;
+        padding:11px 14px; margin-bottom:14px; font-size:12.5px; line-height:1.7;}
+  .flag b{font-weight:800;}
+
+  .grid{display:grid; grid-template-columns:1.35fr 1fr; gap:14px; align-items:start;}
+  @media(max-width:1100px){.grid{grid-template-columns:1fr;}}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-size:10.5px; color:var(--muted); font-weight:700; padding:7px 8px;
+     border-bottom:1px solid var(--line); white-space:nowrap;}
+  td{padding:8px 8px; border-bottom:1px solid #EEEFF2; vertical-align:middle;}
+  tr.row{cursor:pointer;} tr.row:hover td{background:#FBF9EE;}
+  tr.row.sel td{background:#FFF4CC;}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-family:'Manrope'; font-weight:800;}
+  .sd{width:8px; height:8px; border-radius:50%;}
+  .hot{background:var(--orange); box-shadow:0 0 0 3px var(--orange-soft);}
+  .warm{background:var(--amber);} .cold{background:#A9BCC7;}
+  .badge{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px;
+         border-radius:99px; margin-right:3px;}
+  .b-orange{background:var(--orange-soft); color:#B4501B;}
+  .b-teal{background:var(--teal-soft); color:var(--teal-dark);}
+  .b-blue{background:var(--blue-soft); color:#2A5E8C;}
+  .b-grey{background:#EEF2F4; color:#5C6F7C;}
+  .b-green{background:var(--green-soft); color:#137A4E;}
+  .b-red{background:var(--red-soft); color:#A03636;}
+
+  .comp{display:flex; gap:9px; align-items:baseline; padding:6px 0; border-bottom:1px solid #F3F4F7;
+        font-size:12px;}
+  .comp:last-child{border-bottom:none;}
+  .comp .p{width:52px; text-align:right; font-family:'Manrope'; font-weight:800;}
+  .comp .n{flex:1;}
+  .comp .m{font-size:10.5px; color:var(--muted); white-space:nowrap;}
+  .comp.fact .p{color:#137A4E;} .comp.behaviour .p{color:#B4501B;}
+  .tot{display:flex; justify-content:space-between; align-items:baseline; margin-top:10px;
+       padding-top:10px; border-top:2px solid var(--ink); font-weight:900;}
+  .tot .big{font-family:'Manrope'; font-size:26px;}
+
+  .btn{border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 12px;
+       font-size:11.5px; font-weight:800; cursor:pointer; font-family:inherit;}
+  .btn:hover{background:#F2F3F6;}
+  .btn.k{background:var(--ink); color:var(--teal); border-color:var(--ink);}
+  .row-btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:12px;}
+
+  .team td.late{color:#A03636; font-weight:800;}
+  .team tr.idle td{background:#FDF6F6;}
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+         background:var(--ink); color:#fff; padding:11px 20px; border-radius:10px; font-size:13px;
+         font-weight:700; opacity:0; transition:.25s; pointer-events:none; z-index:99;}
+  .toast.on{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Exceed Box — backend</h1>
+  <span class="live"><i></i>LIVE · reading the database</span>
+  <span class="sub">Every number below is computed. Nothing on this page is hardcoded.</span>
+</div>
+
+<div class="top" style="margin-top:-8px;">
+  <span class="sub">Every /api/* route needs a login now (SPEC.md auth+RBAC). Dev-only:
+    works when the server has <code>EXCEEDBOX_DEV_AUTH=1</code> and no SUPABASE_JWT_SECRET.</span>
+  <select id="whoami" class="btn" style="font-weight:700;"></select>
+  <button class="btn k" onclick="loginAs()">Log in</button>
+  <span class="hint" id="whoamisub"></span>
+</div>
+
+<div class="kpis" id="kpis"></div>
+<div id="flags"></div>
+
+<div class="grid">
+  <div>
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-head"><h3>Leads</h3><span class="hint" id="leadcount">…</span></div>
+      <div class="card-body" style="padding-top:8px;">
+        <table><thead><tr>
+          <th>Lead</th><th>Channels</th><th>Purpose</th><th>Stage</th>
+          <th style="text-align:right;">Score</th><th>Latest activity</th>
+        </tr></thead><tbody id="leads"></tbody></table>
+        <div class="hint" style="margin-top:9px;">Click a row to see how its score was built.
+          Channels shows every door a person came through — one person, not three.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Team status</h3>
+        <span class="hint">who is behind, and who has nothing scheduled</span></div>
+      <div class="card-body" style="padding-top:8px;">
+        <table class="team"><thead><tr>
+          <th>Rep</th><th style="text-align:right;">Open</th><th style="text-align:right;">Overdue</th>
+          <th style="text-align:right;">Leads</th><th>Escalation</th><th></th>
+        </tr></thead><tbody id="team"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="detailcard">
+    <div class="card-head"><h3 id="dname">Pick a lead</h3><span class="hint" id="dco"></span></div>
+    <div class="card-body" id="detail">
+      <div class="hint">Select someone on the left and this shows every event that produced their
+        score, with the decay applied.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "";
+let selected = null;
+
+// Dev-only login bar. Mirrors seed.py's USERS list — this page is a debug
+// tool, not the product UI (that is exceed-box-ios), so it hardcodes the
+// seeded emails rather than reading them from anywhere.
+const DEMO_USERS = [
+  ["balraj@exceed-re.ae","Balraj — admin"],
+  ["teruo@exceed-re.ae","Teruo — admin"],
+  ["fujiwara@exceed-re.ae","Fujiwara — office_manager"],
+  ["marketing@exceed-re.ae","SNS Marketing — marketing"],
+  ["yupan@exceed-re.ae","Yupan — sales"],
+  ["chiaki@exceed-re.ae","Chiaki — sales"],
+];
+document.getElementById("whoami").innerHTML =
+  DEMO_USERS.map(([e,l])=>`<option value="${e}">${l}</option>`).join("");
+
+// Lead names/companies arrive from imported CSVs, scanned business cards and GoHighLevel —
+// untrusted third-party text. Everything interpolated into HTML goes through esc().
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function token(){ return localStorage.getItem("exceedbox_dev_token") || ""; }
+
+async function loginAs(){
+  const email = document.getElementById("whoami").value;
+  try{
+    const r = await fetch("/api/devtoken?email="+encodeURIComponent(email));
+    if(!r.ok){ toast("Dev auth is off on the server — set EXCEEDBOX_DEV_AUTH=1"); return; }
+    const { token: t } = await r.json();
+    localStorage.setItem("exceedbox_dev_token", t);
+    const me = await j("/api/me");
+    document.getElementById("whoamisub").textContent =
+      me.error ? me.error.message : `logged in as ${me.name} (${me.role})`;
+    refresh();
+  }catch(e){ toast("Login failed: "+e); }
+}
+
+const heatClass = h => h;
+const money = n => n === null ? "—" : n;
+
+async function j(url, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers, token() ? {"Authorization":"Bearer "+token()} : {});
+  const r = await fetch(API+url, opts);
+  return r.json();
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(window._tt); window._tt = setTimeout(()=>t.classList.remove("on"), 2600);
+}
+
+async function loadDash(){
+  const d = await j("/api/dashboard");
+  if(d.error){ document.getElementById("kpis").innerHTML =
+    `<div class="kpi null"><div class="l">DASHBOARD</div><div class="v">${esc(d.error.message)}</div></div>`;
+    return; }
+  const k = d.kpis;
+  document.getElementById("kpis").innerHTML = `
+    <div class="kpi"><div class="l">TOTAL LEADS</div><div class="v num">${k.total_leads}</div>
+      <div class="s">merged, no duplicates</div></div>
+    <div class="kpi"><div class="l">BOOKED</div><div class="v num">${k.booked}</div>
+      <div class="s">consultations</div></div>
+    <div class="kpi"><div class="l">NEGOTIATING</div><div class="v num">${k.negotiating}</div>
+      <div class="s">progressed</div></div>
+    <div class="kpi"><div class="l">CLOSED</div><div class="v num">${k.won}</div>
+      <div class="s">contracts</div></div>
+    <div class="kpi null"><div class="l">EXPECTED REVENUE</div>
+      <div class="v">not computed</div>
+      <div class="s">blocked on stage close-probabilities (D15)</div></div>`;
+
+  document.getElementById("flags").innerHTML = (d.flags||[]).map(f=>`
+    <div class="flag"><b>⚑ ${esc(f.title)}</b><br>${esc(f.detail)}</div>`).join("")
+    + `<div class="flag" style="border-left-color:${d.source_total_matches_tile?'#1FA36B':'#DD5B5B'};
+         background:${d.source_total_matches_tile?'#F5FBF8':'#FDF6F6'};">
+        <b>Source attribution check:</b> the by-source figures
+        ${d.source_total_matches_tile ? "add up to the booked tile exactly" :
+          "do NOT match the booked tile"} —
+        ${d.by_source.map(s=>esc(s.source)+" "+Number(s.n)).join(" · ") || "no bookings yet"}.
+        The demo's chart summed to 55 against a tile of 30.</div>`;
+}
+
+async function loadLeads(){
+  const d = await j("/api/leads?page_size=100");
+  if(d.error){ document.getElementById("leadcount").textContent = d.error.message;
+    document.getElementById("leads").innerHTML = ""; return; }
+  document.getElementById("leadcount").textContent = d.data.length + " of " + d.total +
+    " (page " + d.page + ", " + d.page_size + "/page — RBAC-filtered for the logged-in role)";
+  document.getElementById("leads").innerHTML = d.data.map(l=>`
+    <tr class="row ${selected===l.id?'sel':''}" onclick="showLead(${Number(l.id)})">
+      <td><b>${esc(l.name)}</b><div style="font-size:10.5px;color:var(--muted);">${esc(l.company||"—")}</div></td>
+      <td>${l.channels.map(c=>`<span class="badge ${
+            c==='business_card'?'b-orange':c==='csv'?'b-teal':c==='sns'?'b-blue':'b-grey'}">${esc(c)}</span>`).join("")}
+          ${l.contact_redacted?'<span class="badge b-red">contact hidden</span>':''}</td>
+      <td style="font-size:11.5px;">${esc(l.purpose)}</td>
+      <td><span class="badge ${l.stage==='booked'?'b-green':l.stage==='responded'?'b-blue':'b-grey'}">${esc(l.stage)}</span></td>
+      <td style="text-align:right;"><span class="pill"><span class="sd ${esc(heatClass(l.heat))}"></span>${Number(l.score)}</span></td>
+      <td style="font-size:11.5px;color:var(--muted);">${esc(l.activity_note)}</td>
+    </tr>`).join("");
+}
+
+async function loadTeam(){
+  const d = await j("/api/team?page_size=50");
+  if(d.error){ document.getElementById("team").innerHTML =
+    `<tr><td colspan="6" class="hint">${esc(d.error.message)}</td></tr>`; return; }
+  document.getElementById("team").innerHTML = d.data.map(t=>`
+    <tr class="${t.idle?'idle':''}">
+      <td><b>${esc(t.name_en)}</b><div style="font-size:10.5px;color:var(--muted);">${esc(t.role||"")}</div></td>
+      <td style="text-align:right;" class="num">${Number(t.open)}</td>
+      <td style="text-align:right;" class="num ${t.overdue?'late':''}">${Number(t.overdue)}</td>
+      <td style="text-align:right;" class="num">${Number(t.leads_owned)}</td>
+      <td>${t.worst_escalation ? "❗".repeat(t.worst_escalation) : "—"}</td>
+      <td>${t.idle ? '<span class="badge b-red">idle — owns leads, no tasks</span>' : ""}</td>
+    </tr>`).join("");
+}
+
+async function showLead(id){
+  selected = id;
+  const [full, sc] = await Promise.all([j("/api/leads/"+id), j("/api/leads/"+id+"/score")]);
+  if(full.error){ toast(full.error.message); return; }
+  const l = full.lead;
+  document.getElementById("dname").textContent = l.name;
+  document.getElementById("dco").textContent = (l.company||"") + " · lead #" + l.id;
+
+  const comps = sc.components.map(c=>`
+    <div class="comp ${esc(c.group)}">
+      <div class="p">${c.points>0?"+":""}${Number(c.points)}</div>
+      <div class="n">${esc(c.label_en||c.kind)}
+        <div class="m">${esc(String(c.occurred_at).slice(0,10))} · ${Number(c.age_days)}d ago ·
+          base ${c.base_points>0?"+":""}${Number(c.base_points)} × ${Number(c.decay_factor)}
+          ${c.group==='fact'?' · never decays':''}
+          ${c.source==='human'?' · <b>set by a person</b>':''}</div></div>
+    </div>`).join("") || '<div class="hint">No scored events yet.</div>';
+
+  const cons = full.consent || {};
+  document.getElementById("detail").innerHTML = `
+    ${comps}
+    <div class="tot"><span>Score</span><span class="big">${sc.score}</span></div>
+    <div class="hint" style="margin-top:4px;">
+      threshold ${sc.threshold} · ${sc.hot?'<b style="color:#B4501B;">above it — a rep gets notified</b>':'below it — stays in nurture'}</div>
+
+    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--line);">
+      <div style="font-size:10.5px;font-weight:900;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;">CHANNELS · ONE PERSON</div>
+      ${full.channels.map(c=>`<span class="badge b-grey">${esc(c.channel)} · ${esc(String(c.seen_at).slice(0,10))}</span>`).join(" ")}
+      <div style="font-size:10.5px;font-weight:900;letter-spacing:.08em;color:var(--muted);margin:12px 0 6px;">CONSENT</div>
+      <span class="badge ${cons.basis==='explicit'?'b-green':cons.basis==='unknown'?'b-red':'b-orange'}">${esc(cons.basis||'none')}</span>
+      <span class="hint">${esc(cons.obtained_via||"no record of when or where")}</span>
+    </div>
+
+    <div class="row-btns">
+      <button class="btn k" onclick="fire(${id},'open')">Fire an open (+1)</button>
+      <button class="btn k" onclick="fire(${id},'click')">Fire a click (+3)</button>
+      <button class="btn" onclick="refresh()">Refresh</button>
+    </div>
+    <div class="hint" style="margin-top:7px;">These hit the real tracking endpoints, exactly as a
+      mail client and a browser would. Watch the score move.</div>`;
+  loadLeads();
+}
+
+async function fire(id, kind){
+  // find a send_id for this lead, or make one, then hit the real endpoint
+  const r = await j("/api/leads/"+id);
+  let sid = (r.timeline.find(t=>t.kind==='open'||t.kind==='click')||{}).send_id;
+  if(!sid){ sid = "e_7Kq2mB"; }
+  if(kind==='open'){ await fetch("/o/"+sid+".gif", {cache:"no-store"}); }
+  else { await fetch("/c/"+sid+"?u=/dubai-cost", {redirect:"manual"}).catch(()=>{}); }
+  toast(kind==='open' ? "Open pixel fired — +1" : "Click logged and redirected — +3");
+  setTimeout(()=>{ showLead(id); loadDash(); }, 300);
+}
+
+function refresh(){ loadDash(); loadLeads(); loadTeam(); if(selected) showLead(selected); }
+refresh();
+setInterval(()=>{ loadDash(); loadTeam(); }, 8000);
+</script>
+</body>
+</html>

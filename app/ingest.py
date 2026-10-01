@@ -22,8 +22,15 @@ import re
 import sqlite3
 from datetime import datetime
 
+from . import db
+
 CHANNELS = {"business_card", "csv", "gohighlevel", "lp_form", "sns", "gmail",
-            "referral", "whatsapp", "line", "showroom", "property_finder"}
+            "referral", "whatsapp", "line", "showroom", "property_finder",
+            # 0007: the public booking page. Someone who asks for a meeting and
+            # gives their address for it has clearly consented to be contacted
+            # about that meeting — which is not the same as consenting to a
+            # marketing sequence, so the basis is 'implied', not 'explicit'.
+            "booking_page"}
 
 # consent defaults per channel (D11 — the table that decides who you may email)
 CONSENT_BY_CHANNEL = {
@@ -38,6 +45,7 @@ CONSENT_BY_CHANNEL = {
     "whatsapp":       ("unknown",   ""),
     "line":           ("unknown",   ""),
     "property_finder": ("implied",  "portal enquiry"),
+    "booking_page":   ("implied",   "requested a meeting and gave an address for it"),
 }
 
 
@@ -102,11 +110,15 @@ def find_existing(con: sqlite3.Connection, *, email=None, phone=None,
 def _add_identity(con, lead_id, kind, value):
     if not value:
         return
+    # The savepoint matters on Postgres: a constraint violation aborts the whole
+    # transaction there, so without it every later statement in upsert_lead
+    # would fail too. On SQLite it is a no-op.
     try:
-        con.execute(
-            "INSERT INTO lead_identities (lead_id, kind, value) VALUES (?,?,?)",
-            (lead_id, kind, value))
-    except sqlite3.IntegrityError:
+        with con.savepoint():
+            con.execute(
+                "INSERT INTO lead_identities (lead_id, kind, value) VALUES (?,?,?)",
+                (lead_id, kind, value))
+    except db.IntegrityError:
         pass                      # already known, on this lead or another
 
 
@@ -114,11 +126,12 @@ def _add_channel(con, lead_id, channel, note=None, seen_at=None):
     if channel not in CHANNELS:
         raise ValueError("unknown channel: %s" % channel)
     try:
-        con.execute(
-            "INSERT INTO lead_channels (lead_id, channel, note, seen_at) VALUES (?,?,?,?)",
-            (lead_id, channel, note,
-             (seen_at or datetime.utcnow()).isoformat(sep=" ", timespec="seconds")))
-    except sqlite3.IntegrityError:
+        with con.savepoint():
+            con.execute(
+                "INSERT INTO lead_channels (lead_id, channel, note, seen_at) VALUES (?,?,?,?)",
+                (lead_id, channel, note,
+                 (seen_at or datetime.utcnow()).isoformat(sep=" ", timespec="seconds")))
+    except db.IntegrityError:
         pass                      # already seen through this channel
 
 
@@ -140,6 +153,18 @@ def _set_consent_if_stronger(con, lead_id, channel, when=None):
              basis=excluded.basis, obtained_at=excluded.obtained_at,
              obtained_via=excluded.obtained_via, updated_at=datetime('now')""",
         (lead_id, basis, ts if basis != "unknown" else None, via))
+
+
+def set_consent_explicit(con: sqlite3.Connection, lead_id: int, *, via: str,
+                         when: datetime | None = None) -> None:
+    """SPEC-V2 §6: the business-card scan form carries a consent checkbox —
+    'the one moment we can capture explicit, timestamped consent' (D11b#3).
+    Reuses the same never-downgrade rule as channel-based consent
+    (_set_consent_if_stronger) rather than a blind overwrite, so an existing
+    'explicit' basis from elsewhere is never weakened by re-scanning."""
+    _set_consent_if_stronger(con, lead_id, "showroom", when)  # 'showroom' maps to explicit
+    con.execute("UPDATE lead_consent SET obtained_via=? WHERE lead_id=?", (via, lead_id))
+    con.commit()
 
 
 def upsert_lead(con: sqlite3.Connection, *, name, channel, company=None, title=None,
