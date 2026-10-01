@@ -134,7 +134,7 @@ ERROR_BODY_KEYS = {"code", "message"}
 # integration (auth mode, media backend, mail provider and whether it actually
 # delivers) so an Integrations screen cannot show a green tick it has not
 # earned. Adding keys here is a deliberate contract change, not drift.
-HEALTH_KEYS = {"ok", "leads", "events", "dialect", "auth", "media", "mail"}
+HEALTH_KEYS = {"ok", "leads", "events", "dialect", "open_access", "auth", "media", "mail"}
 
 # ══ SPEC-V2 canonical key sets ═══════════════════════════════════════════════
 

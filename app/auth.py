@@ -426,6 +426,41 @@ def forget_users() -> None:
         _user_cache.clear()
 
 
+def open_access_email() -> Optional[str]:
+    """EXCEEDBOX_OPEN_ACCESS_EMAIL — Balraj, 2026-10-01: "remove login from
+    exceed box". When set, a request WITHOUT a token is treated as this
+    existing app_user (e.g. qa-admin@exceed-re.ae) instead of a 401, so the
+    staff tool opens with no sign-in. A request that DOES carry a token is
+    still verified normally. Unset = login required again. Never leave it
+    on once real customer leads are in the database."""
+    v = (os.environ.get("EXCEEDBOX_OPEN_ACCESS_EMAIL") or "").strip().lower()
+    return v or None
+
+
+def _open_access_user() -> Optional[CurrentUser]:
+    email = open_access_email()
+    if not email:
+        return None
+    cached = _cached_user("open-access", email)
+    if cached is not None:
+        return cached
+    from . import db
+    con = db.connect()
+    try:
+        row = con.execute("SELECT * FROM app_user WHERE lower(email)=?", (email,)).fetchone()
+        if not row or not row["supabase_uid"]:
+            log.error("EXCEEDBOX_OPEN_ACCESS_EMAIL=%s has no bound app_user row; "
+                      "falling back to login required", email)
+            return None
+        user = load_or_provision(con, sub=row["supabase_uid"], email=row["email"])
+    finally:
+        con.close()
+    if not user.is_active:
+        return None
+    _remember_user("open-access", email, user)
+    return user
+
+
 def current_user(authorization: Optional[str] = Header(None)) -> CurrentUser:
     """The one dependency every protected route takes. Attaches con-free —
     each caller still opens its own db connection; this only needs one to
@@ -438,6 +473,9 @@ def current_user(authorization: Optional[str] = Header(None)) -> CurrentUser:
     reaches load_or_provision, so it cannot even auto-provision an inactive
     row for an address that was never allowed to sign in."""
     if not authorization or not authorization.lower().startswith("bearer "):
+        open_user = _open_access_user()
+        if open_user is not None:
+            return open_user
         raise _err(401, "missing_token", "Authorization: Bearer <token> is required.")
     token = authorization.split(" ", 1)[1].strip()
     claims = _decode(token)

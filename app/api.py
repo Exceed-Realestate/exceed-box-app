@@ -3519,6 +3519,7 @@ def health():
             "leads": db.scalar(c, "SELECT count(*) FROM leads"),
             "events": db.scalar(c, "SELECT count(*) FROM events"),
             "dialect": db.DIALECT,
+            "open_access": bool(auth.open_access_email()),
             "auth": ("supabase-jwks" if auth.SUPABASE_JWKS_URL else
                      "supabase-hs256" if auth.SUPABASE_JWT_SECRET else
                      "dev" if auth.DEV_AUTH_ENABLED else "none"),
